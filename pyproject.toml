@@ -67,3 +67,9 @@ packages = [
     "langmonitor.schemas",
     "langmonitor.sdk",
 ]
+include-package-data = true
+
+# Ship the statically-exported interactive dashboard inside the wheel so
+# `pip install langmonitor` serves the UI with no Node/build step.
+[tool.setuptools.package-data]
+langmonitor = ["static/dashboard/**/*"]

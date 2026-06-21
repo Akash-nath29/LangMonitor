@@ -360,7 +360,7 @@ def _get_embedded_server(
             )
             srv.start()
             _embedded_servers[key] = srv
-            log.info("LangMonitor dashboard live at %s/docs", srv.base_url)
+            log.info("LangMonitor dashboard live at %s", srv.base_url)
         return srv
 
 
@@ -417,7 +417,7 @@ class MonitoredGraph:
             # Embedded: launch (or reuse) a dashboard in this process. Monitoring
             # is best-effort — if the server can't start we warn and keep the
             # agent running unmonitored rather than crash it.
-            resolved_port = int(port) if port is not None else 8000
+            resolved_port = int(port) if port is not None else 8080
             try:
                 server = _get_embedded_server(
                     host, resolved_port, api_key, enable_docs=True
@@ -428,7 +428,7 @@ class MonitoredGraph:
                     try:
                         import webbrowser
 
-                        webbrowser.open(f"{server.base_url}/docs")
+                        webbrowser.open(server.base_url)
                     except Exception:
                         pass
             except Exception as e:
@@ -694,10 +694,12 @@ def monitor(
 
     Three modes, chosen by what you pass:
 
-    - **Embedded (default).** ``monitor(graph)`` or ``monitor(graph, port=8000)``
-      launches a dashboard in this process — open ``http://<host>:<port>/docs``
-      (Swagger) to watch and control the run (kill, pause, resume, inject state,
-      checkpoints, guardrails, A/B). Pass ``open_browser=True`` to pop it open.
+    - **Embedded (default).** ``monitor(graph)`` or ``monitor(graph, port=8080)``
+      launches a dashboard in this process — open ``http://<host>:<port>/`` to
+      watch and control the run from the interactive dashboard (kill, pause,
+      resume, inject state, checkpoints, guardrails, A/B). The raw API and
+      Swagger docs remain available at ``/api/v1`` and ``/docs``. Pass
+      ``open_browser=True`` to pop the dashboard open. Defaults to port 8080.
     - **Remote.** ``monitor(graph, server_url="ws://host:8000")`` connects to a
       LangMonitor server running elsewhere. Pass ``api_key`` (or set
       ``LANGMONITOR_API_KEY``) if that server requires one.
