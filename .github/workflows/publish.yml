@@ -1,0 +1,118 @@
+name: CI / Publish to PyPI
+
+# CI runs on every PR to main (test gate). CD runs when a PR is merged into main
+# (push to main): test -> build -> publish to PyPI. Also runnable on demand.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Don't let two main-branch publishes race; let an in-flight one finish.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # --------------------------------------------------------------------------- #
+  # 1) Test gate — runs for PRs AND merges.
+  # --------------------------------------------------------------------------- #
+  test:
+    name: Test (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install package + dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest -q
+
+  # --------------------------------------------------------------------------- #
+  # 2) Build + verify the distributions — only on merge/dispatch, after tests.
+  # --------------------------------------------------------------------------- #
+  build:
+    name: Build & verify distributions
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: python -m pip install --upgrade pip build twine
+
+      - name: Build sdist + wheel
+        run: python -m build
+
+      - name: Verify package metadata
+        run: twine check dist/*
+
+      - name: Verify the dashboard UI is bundled in the wheel
+        # The published package ships the prebuilt dashboard via package-data.
+        # CI only sees committed files, so fail loudly if static/ wasn't committed.
+        run: |
+          if ! unzip -l dist/*.whl | grep -q "static/dashboard"; then
+            echo "::error::static/dashboard is missing from the wheel. Commit the static/ directory — CI only sees committed files."
+            exit 1
+          fi
+          echo "Dashboard UI bundled: $(unzip -l dist/*.whl | grep -c 'static/dashboard') files"
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  # --------------------------------------------------------------------------- #
+  # 3) Publish to PyPI — only on merge/dispatch, after a clean build.
+  # --------------------------------------------------------------------------- #
+  publish:
+    name: Publish to PyPI
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # A GitHub Environment named "pypi" — lets you add an approval gate and scope
+    # the PYPI_API_TOKEN secret to releases. (Auto-created on first run.)
+    environment:
+      name: pypi
+      url: https://pypi.org/project/langmonitor/
+    steps:
+      - name: Download built distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          # Don't fail the run if this version is already on PyPI (e.g. a merge
+          # that didn't bump the version). Bump `version` in pyproject.toml to
+          # actually release a new build.
+          skip-existing: true
+          print-hash: true

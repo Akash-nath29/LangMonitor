@@ -3,10 +3,12 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from langmonitor import __version__
 from langmonitor.api.auth import require_api_key
@@ -24,6 +26,11 @@ from langmonitor.engine.core import MainEngine, set_main_engine
 from langmonitor.utils import sanitize_for_log
 
 log = logging.getLogger(__name__)
+
+# The interactive dashboard is a statically-exported single-page app bundled
+# inside the package (langmonitor/static/dashboard). When present it is served
+# at the server root, replacing Swagger as the default landing page.
+DASHBOARD_DIR = Path(__file__).resolve().parent / "static" / "dashboard"
 
 
 def _warn_on_insecure_config() -> None:
@@ -60,6 +67,8 @@ async def lifespan(app: FastAPI):
     await _pump_bus_to_clients()
 
     log.info("LangMonitor %s ready on %s:%s", __version__, settings.SERVER_HOST, settings.SERVER_PORT)
+    if DASHBOARD_DIR.is_dir():
+        log.info("UI:    interactive dashboard at /")
     log.info("REST:  /api/v1/runs, /api/v1/guardrails, /api/v1/ab-tests, ...")
     log.info("WS:    /ws/runs/{run_id}, /ws/all")
 
@@ -130,13 +139,16 @@ def create_app() -> FastAPI:
         )
         return response
 
-    @app.get("/")
-    async def root():
+    dashboard_available = DASHBOARD_DIR.is_dir()
+
+    @app.get("/api")
+    async def api_info():
         return {
             "success": True,
             "data": {
                 "name": "LangMonitor",
                 "version": __version__,
+                "dashboard": "/" if dashboard_available else None,
                 "docs": "/docs",
                 "endpoints": [
                     "/api/v1/runs",
@@ -163,6 +175,34 @@ def create_app() -> FastAPI:
     app.include_router(checkpoints_router, prefix=prefix, dependencies=auth)
     app.include_router(control_router, prefix=prefix, dependencies=auth)
     app.include_router(ws_router)
+
+    # Serve the interactive dashboard SPA at the root. Mounted last so the API
+    # (/api/v1/*), WebSocket (/ws/*), and meta routes (/healthz, /api, /docs)
+    # always take precedence; the static mount only handles everything else.
+    # html=True makes it serve <dir>/index.html for directory paths, so the
+    # exported pages (/runs/, /run/, /guardrails/, /ab-tests/) resolve.
+    if dashboard_available:
+        app.mount(
+            "/",
+            StaticFiles(directory=str(DASHBOARD_DIR), html=True),
+            name="dashboard",
+        )
+        log.info("Dashboard: serving interactive UI at /")
+    else:
+        log.warning(
+            "Dashboard bundle not found at %s — serving API only. "
+            "Build it with `npm run build` in langmonitor-ui and copy out/ "
+            "to langmonitor/static/dashboard, or reinstall the package.",
+            DASHBOARD_DIR,
+        )
+
+        @app.get("/")
+        async def _root_redirect():
+            return {
+                "success": True,
+                "data": {"name": "LangMonitor", "docs": "/docs", "api": "/api"},
+                "error": None,
+            }
 
     return app
 
