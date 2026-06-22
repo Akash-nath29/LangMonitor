@@ -6,7 +6,7 @@
 
   <p><strong>Real-time observability and operator controls for LangGraph agents. One import. Full control.</strong></p>
 
-  [![PyPI](https://img.shields.io/badge/pip-langmonitor-blue)](https://pypi.org/project/langmonitor/)
+  [![PyPI](https://img.shields.io/pypi/v/langmonitor.svg)](https://pypi.org/project/langmonitor/)
   [![Python](https://img.shields.io/badge/python-3.10+-blue)](https://python.org)
   [![FastAPI](https://img.shields.io/badge/fastapi-0.100+-green)](https://fastapi.tiangolo.com)
   [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -20,7 +20,7 @@ LangMonitor watches and controls your LangGraph agents from the outside. It does
 2. **Controls** any live run — kill, pause, resume, inject state, swap prompts — over a REST API.
 3. **Checkpoints** each run on top of LangGraph's native checkpointer, so you can roll back to any point.
 
-Wrap your compiled graph in one line. LangMonitor spins up a dashboard with full Swagger docs on a port you choose — open it in a browser and operate your agent live.
+Wrap your compiled graph in one line. LangMonitor spins up an interactive dashboard on a port you choose — open it in a browser and operate your agent live. (The raw REST API and Swagger docs stay available at `/api/v1` and `/docs`.)
 
 ## Install
 
@@ -41,7 +41,7 @@ monitored = monitor(compiled_graph, port=8000, open_browser=True)
 result = monitored.invoke({"input": "hello"})
 ```
 
-`monitor()` returns a drop-in stand-in for your graph — same `invoke` / `ainvoke`. The moment you call it, a dashboard goes live at **http://localhost:8000/docs**. From that Swagger page you can watch every node, then kill, pause, resume, inject state, roll back, or A/B-swap the running agent.
+`monitor()` returns a drop-in stand-in for your graph — same `invoke` / `ainvoke`. The moment you call it, the interactive dashboard goes live at **http://localhost:8000**. From it you can watch every node, then kill, pause, resume, inject state, roll back, or A/B-swap the running agent. Prefer raw REST? The Swagger UI is at **/docs**.
 
 No separate server to run. The dashboard lives inside your process.
 
@@ -77,7 +77,7 @@ graph.add_edge("inc", "double")
 graph.add_edge("double", END)
 compiled = graph.compile()
 
-# 2. Wrap it — launches the dashboard at http://localhost:8000/docs
+# 2. Wrap it — launches the dashboard at http://localhost:8000
 monitored = monitor(compiled, port=8000, open_browser=True)
 
 # 3. Run it like any compiled graph
@@ -85,7 +85,7 @@ result = monitored.invoke({"n": 3})
 print("result:", result)                 # {'n': 8}  → (3 + 1) * 2
 print("dashboard:", monitored.dashboard_url)
 
-# 4. Keep the process alive so you can explore the run in Swagger.
+# 4. Keep the process alive so you can explore the run in the dashboard.
 #    (The dashboard lives in this process, so it stops when the script exits.)
 input("Press Enter to quit…")
 ```
@@ -97,7 +97,7 @@ pip install langmonitor langgraph
 python example.py
 ```
 
-Then open **http://localhost:8000/docs** to inspect the trace, replay checkpoints, add guardrails, or kill/pause the next run.
+Then open **http://localhost:8000** to inspect the trace, replay checkpoints, add guardrails, or kill/pause the next run.
 
 ## How it works
 
@@ -141,9 +141,9 @@ print("Dashboard:", monitored.dashboard_url)   # http://127.0.0.1:8000
 
 Each run gets a `run_id` (emitted as the `run_started` event and listed at `GET /api/v1/runs`). Use it for every control below.
 
-### Operate from Swagger
+### Operate from the dashboard (or Swagger)
 
-Open **http://localhost:8000/docs** and call the endpoints directly — it's the fastest way to drive a run by hand. Everything there is also a plain REST call you can script.
+Open **http://localhost:8000** for the interactive dashboard, or **http://localhost:8000/docs** to call the endpoints directly from Swagger — the fastest way to drive a run by hand. Everything there is also a plain REST call you can script.
 
 From Python:
 
