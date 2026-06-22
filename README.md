@@ -1,4 +1,7 @@
 <div align="center">
+  <!-- Replace with your banner: <img src="your-banner.png" alt="LangMonitor" width="800" /> -->
+  <img width="1983" height="793" alt="langmonitor" src="https://github.com/user-attachments/assets/02d3dc72-c755-4ac7-9a6f-1292113ded08" />
+
   <h1>LangMonitor</h1>
 
   <p><strong>Real-time observability and operator controls for LangGraph agents. One import. Full control.</strong></p>
